@@ -1,27 +1,57 @@
 package com.hauchee.application; // PackageElement
 
-import com.hauchee.annotation.Priority;
-import com.hauchee.annotation.Tag;
-import com.hauchee.annotation.Tag.Kind;
+import com.hauchee.annotation.Pojo;
 
-@Tag( // AnnotationMirror
-    // ExecutableElement:AnnotationValue pairs
-    stringValue = "A String Value",
-    intValue = 100, 
-    enumValue = Kind.STANDARD, 
-    annotationTypeValue = @Priority(3), 
-    classValue = Application.class, 
-    classesValue = {Application.class}
-)
 public class Application { // TypeElement
     
-    private int id; // VariableElement
+    private String id; // VariableElement
     
-    public void setId(int id) { // ExecutableElement
+    @Pojo( // AnnotationMirror
+        // ExecutableElement:AnnotationValue pairs    
+        fieldNames = {"name", "price"}, 
+        fieldTypes = {String.class, Double.class},
+        fieldsAnnotatedWithPojo = {"Category"}
+    )
+    private Game game; // VariableElement
+
+    public Application(String id, Game game) { // ExecutableElement
         this.id = id;
+        this.game = game;
     }
-    
-    public int getId() { // ExecutableElement
-        return this.id;
+
+    public String getId() { // ExecutableElement
+        return id;
+    }
+
+    public Game getGame() { // ExecutableElement
+        return game;
     }
 }
+
+
+
+
+//@Tag( // AnnotationMirror
+//    // ExecutableElement:AnnotationValue pairs
+//    stringValue = "A String Value",
+//    intValue = 100, 
+//    enumValue = Kind.STANDARD, 
+//    annotationTypeValue = @Priority(3), 
+//    classValue = Application.class, 
+//    classesValue = {Application.class}
+//)
+//public class Application { // TypeElement
+//    
+//    private int id; // VariableElement
+//    
+//    @Pojo(fieldNames = {"name"}, fieldTypes = {String.class}, fieldsAnnotatedWithPojo = {"model"})
+//    private Game game;
+//    
+//    public void setId(int id) { // ExecutableElement
+//        this.id = id;
+//    }
+//    
+//    public int getId() { // ExecutableElement
+//        return this.id;
+//    }
+//}

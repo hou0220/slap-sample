@@ -1,13 +1,10 @@
 package com.hauchee.annotationprocessor;
 
-import com.hauchee.annotationprocessor.visitor.StringArrayVisitor;
-import com.hauchee.annotationprocessor.visitor.TypeArrayVisitor;
 import com.google.auto.service.AutoService;
 import com.hauchee.annotation.Pojo;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.TypeName;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -35,134 +32,115 @@ import javax.tools.Diagnostic;
 @SupportedAnnotationTypes("com.hauchee.annotation.Pojo")
 public class PojoProcessor extends AbstractProcessor {
 
-    private Elements elementUtils;
+    private Elements elementsUtil;
     private Filer filer;
     private Messager messager;
-
-    private VariableElement currentVariableElement;
-    private AnnotationMirror currentAnnotationMirror;
-    
-    private final TypeArrayVisitor typeArrayVisitor = new TypeArrayVisitor();
-    private final StringArrayVisitor stringArrayVisitor = new StringArrayVisitor();
 
     @Override
     public synchronized void init(ProcessingEnvironment processingEnv) {
         super.init(processingEnv);
-        elementUtils = processingEnv.getElementUtils();
+        elementsUtil = processingEnv.getElementUtils();
         filer = processingEnv.getFiler();
         messager = processingEnv.getMessager();
     }
 
     @Override
-    public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+    public boolean process(Set<? extends TypeElement> annotations,
+            RoundEnvironment roundEnv) {
+
+        // The variable element which annotated with @Pojo annotation.
+        VariableElement varElement = null;
+
+        // The @Pojo annotation element.
+        AnnotationMirror annotationMirror = null;
+
         try {
+            // This return variable element that annotated with @Pojo annotation.
             for (Element annotatedElement : roundEnv.getElementsAnnotatedWith(Pojo.class)) {
+                varElement = (VariableElement) annotatedElement;
 
-                preProcess((VariableElement) annotatedElement);
-                
-                PackageElement pkgElement = elementUtils.getPackageOf(currentVariableElement.getEnclosingElement());
-                PojoSourceCodeBuilder sourceCodeBuilder = new PojoSourceCodeBuilder(filer, pkgElement);
-                
-                List<TypeName> fieldTypes = new ArrayList<>();
-                List<String> fieldNames = new ArrayList<>();
-                List<String> pojoAnnotatedFields = new ArrayList<>();
-                Map<? extends ExecutableElement, ? extends AnnotationValue> elementValues = currentAnnotationMirror.getElementValues();
-                for (Map.Entry<? extends ExecutableElement, ? extends AnnotationValue> entry : elementValues.entrySet()) {
-                    String key = entry.getKey().getSimpleName().toString();
-                    switch (key) {
-                        case "fieldTypes":
-                            entry.getValue().accept(typeArrayVisitor, fieldTypes);
-                            break;
-                        case "fieldNames":
-                            entry.getValue().accept(stringArrayVisitor, fieldNames);
-                            break;
-                        case "pojoAnnotatedFields":
-                            entry.getValue().accept(stringArrayVisitor, pojoAnnotatedFields);
-                            break;
+                // Getting all the annotation elements from the variable element.
+                List<? extends AnnotationMirror> allAnnotationMirrors
+                        = varElement.getAnnotationMirrors();
+                for (AnnotationMirror aAnnotationMirror : allAnnotationMirrors) {
+
+                    // Make sure the annotation element is belong to Pojo annotation type.
+                    if (aAnnotationMirror.getAnnotationType().toString()
+                            .equals(Pojo.class.getName())) {
+
+                        // Found the @Pojo element.
+                        annotationMirror = aAnnotationMirror;
+
+                        // Create a visitor instance.
+                        PojoAnnotationValueVisitor visitor = new PojoAnnotationValueVisitor();
+
+                        // Getting annotation element values from the @Pojo element.
+                        Map<? extends ExecutableElement, ? extends AnnotationValue> elementValues
+                                = annotationMirror.getElementValues();
+                        for (Map.Entry<? extends ExecutableElement, ? extends AnnotationValue> entry : elementValues.entrySet()) {
+                            // The 'entry.getKey()' here is the annotation attribute name.
+                            String key = entry.getKey().getSimpleName().toString(); 
+                            
+                            // The 'entry.getValue()' here is the annotation value which could accept a visitor.
+                            entry.getValue().accept(visitor, key);
+                        }
+
+                        visitor.validateValues(); // Throw ProcessingException if annotation value is invalid.
+                        buildPojoClass(varElement, visitor);
+                        break;
+
                     }
                 }
 
-                validateValues(fieldNames, fieldTypes, pojoAnnotatedFields);
-
-                /**
-                 * Process field names and types. *
-                 */
-                for (int i = 0; i < fieldTypes.size(); i++) {
-                    TypeName fieldType = fieldTypes.get(i);
-                    String fieldName = fieldNames.get(i);
-
-                    // Skip for default value.
-                    if (fieldName.equals("N/A") && fieldType.toString().equals("java.lang.Void")) {
-                        i++;
-                        continue;
-                    }
-
-                    sourceCodeBuilder.addFieldWithGetterSetter(fieldName, fieldType);
-                }
-
-                /**
-                 * Process fields that to be annotated with Pojo annotation. *
-                 */
-                for (String oriPojoAnnotatedField : pojoAnnotatedFields) {
-
-                    // Skip for default value.
-                    if (oriPojoAnnotatedField.equals("N/A")) {
-                        continue;
-                    }
-
-                    String pojoAnnotatedField = oriPojoAnnotatedField;
-                    String pojoAnnotatedFieldName = pojoAnnotatedField.substring(0, 1).toUpperCase()
-                            + pojoAnnotatedField.substring(1);
-                    ClassName pojoAnnotatedFieldType = ClassName.get(sourceCodeBuilder.getPackageName(), pojoAnnotatedFieldName);
-
-                    sourceCodeBuilder.addAnnotatedFiedWithGetterSetter(pojoAnnotatedField, pojoAnnotatedFieldType, Pojo.class);
-                }
-
-                sourceCodeBuilder.writeToJavaFile(currentVariableElement.asType().toString());
             }
         } catch (ProcessingException e) {
-            error(e, e.getMessage());
+            error(varElement, annotationMirror, e.getMessage());
         } catch (IOException e) {
-            error(null, e.getMessage());
+            error(null, null, e.getMessage());
         }
 
         return true;
     }
 
-    private void preProcess(VariableElement varElement) {
-        this.currentVariableElement = varElement;
+    private void error(VariableElement varElement, AnnotationMirror annotationMirror,
+            String message) {
+        messager.printMessage(Diagnostic.Kind.ERROR, message, varElement, annotationMirror
+        );
+    }
+
+    private void buildPojoClass(
+            VariableElement varElement, PojoAnnotationValueVisitor visitor)
+            throws IOException {
+
+        List<String> fieldNames = visitor.getFieldNames();
+        List<TypeName> fieldTypes = visitor.getFieldTypes();
+        List<String> fieldsAnnotatedWithPojo = visitor.getFieldsAnnotatedWithPojo();
+
+        PackageElement pkgElement = elementsUtil.getPackageOf(varElement.getEnclosingElement());
         
-        List<? extends AnnotationMirror> allAnnotationMirrors
-                = elementUtils.getAllAnnotationMirrors(currentVariableElement);
-        for (AnnotationMirror annotationMirror : allAnnotationMirrors) {
-            if (annotationMirror.getAnnotationType().toString().equals(Pojo.class.getName())) {
-                currentAnnotationMirror = annotationMirror;
-                break;
-            }
-        }
-    }
+        // Create a source code builder instance.
+        PojoSourceCodeBuilder sourceCodeBuilder = new PojoSourceCodeBuilder(filer, pkgElement);
 
-    private void validateValues(List<String> fieldNames, List<TypeName> fieldTypes, List<String> pojoAnnotatedFields) throws ProcessingException {
-        if (fieldNames.size() != fieldTypes.size()) {
-            throw new ProcessingException(currentVariableElement, currentAnnotationMirror,
-                    "The length of 'fieldNames' must be same as the length of 'fieldTypes'.");
-        }
-        validateEmptyElement(fieldNames, "fieldNames");
-        validateEmptyElement(pojoAnnotatedFields, "pojoAnnotatedFields");
-    }
+        // Process field names and types.
+        for (int i = 0; i < fieldTypes.size(); i++) {
+            TypeName fieldType = fieldTypes.get(i);
+            String fieldName = fieldNames.get(i);
 
-    private void validateEmptyElement(List<String> elements, String name) throws ProcessingException {
-        int i = 0;
-        for (String fieldName : elements) {
-            if (fieldName.trim().isEmpty()) {
-                throw new ProcessingException(currentVariableElement, currentAnnotationMirror,
-                        "\"%s\" with element index \"%d\" must not be an empty String.", name, i);
-            }
-            i++;
+            sourceCodeBuilder.addFieldWithGetterSetter(fieldName, fieldType);
         }
-    }
 
-    private void error(ProcessingException pe, String msg) {
-        messager.printMessage(Diagnostic.Kind.ERROR, msg, pe.getElement(), pe.getAnnotationMirror());
+        // Process fields that to be annotated with Pojo annotation.
+        for (String aFieldAnnotatedWithPojo : fieldsAnnotatedWithPojo) {
+            String fieldAnnotatedWithPojo = aFieldAnnotatedWithPojo;
+            String pojoAnnotatedFieldName = fieldAnnotatedWithPojo.substring(0, 1).toUpperCase()
+                    + fieldAnnotatedWithPojo.substring(1);
+            ClassName fieldType = ClassName.get(sourceCodeBuilder.getPackageName(), pojoAnnotatedFieldName);
+
+            sourceCodeBuilder
+                    .addAnnotatedFieldWithGetterSetter(fieldAnnotatedWithPojo, fieldType, Pojo.class);
+        }
+
+        // Write to the new Java source file.
+        sourceCodeBuilder.writeToJavaFile(varElement.asType().toString());
     }
 }
