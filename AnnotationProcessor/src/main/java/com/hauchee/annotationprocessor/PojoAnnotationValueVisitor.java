@@ -7,6 +7,11 @@ import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.SimpleAnnotationValueVisitor7;
 
+/**
+ * Annotation value visitor to extract values from @Pojo annotation.
+ * 
+ * @author HauChee
+ */
 class PojoAnnotationValueVisitor extends SimpleAnnotationValueVisitor7<Void, String> {
 
     private final List<TypeName> fieldTypes = new ArrayList<>();

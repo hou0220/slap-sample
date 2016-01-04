@@ -22,6 +22,12 @@ import javax.lang.model.type.MirroredTypesException;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.SimpleAnnotationValueVisitor7;
 
+/**
+ * This annotation processor demonstrating different approaches of getting class
+ * annotation value.
+ * 
+ * @author HauChee
+ */
 @AutoService(Processor.class)
 @SupportedSourceVersion(SourceVersion.RELEASE_7)
 @SupportedAnnotationTypes("com.hauchee.annotation.Tag")

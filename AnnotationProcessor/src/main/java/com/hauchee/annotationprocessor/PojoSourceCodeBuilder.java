@@ -12,6 +12,12 @@ import javax.annotation.processing.Filer;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.PackageElement;
 
+/**
+ * The source code builder which make use of JavaPoet to construct and write new
+ * Java source content.
+ * 
+ * @author HauChee
+ */
 class PojoSourceCodeBuilder {
     
     private final Filer filer;

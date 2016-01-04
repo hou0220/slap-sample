@@ -27,6 +27,11 @@ import javax.lang.model.element.VariableElement;
 import javax.lang.model.util.Elements;
 import javax.tools.Diagnostic;
 
+/**
+ * This annotation processor demonstrating code generation and processing rounds.
+ * 
+ * @author HauChee
+ */
 @AutoService(Processor.class)
 @SupportedSourceVersion(SourceVersion.RELEASE_7)
 @SupportedAnnotationTypes("com.hauchee.annotation.Pojo")
